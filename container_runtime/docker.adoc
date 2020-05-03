@@ -1,0 +1,132 @@
+== Certs
+
+[source,bash]
+----
+yum install docker -y
+systemctl restart docker
+
+mkdir /registry
+
+mkdir /registry/auth
+docker run --rm --entrypoint htpasswd registry:2 -Bbn username password > /registry/auth/htpasswd
+chcon -Rt svirt_sandbox_file_t /registry/auth/
+
+mkdir /registry/certs
+openssl req -newkey rsa:4096 -nodes -sha256 -keyout /registry/certs/domain.key -x509 -days 365 -out /registry/certs/domain.crt
+chcon -Rt svirt_sandbox_file_t /registry/certs/
+
+cp /registry/certs/domain.crt /etc/docker/certs.d/domain/hostname.crt
+
+mkdir /registry/data
+docker run -d -p 5000:5000 --restart=always --name registry -v /registry/auth:/auth:ro -v /registry/certs:/certs:ro -v /registry/data:/var/lib/registry -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt -e REGISTRY_HTTP_TLS_KEY=/certs/domain.key -e "REGISTRY_AUTH=htpasswd" -e "REGISTRY_AUTH_HTPASSWD_REALM=basic-realm" -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd registry:2
+
+docker login https://domain/hostname.crt:5000
+
+{
+ "insecure-registries" : ["myregistrydomain.com:5000"]
+}
+
+systemctl restart docker
+
+docker restart registry
+----
+
+[[backup_docker_container]]
+=== Backup Docker Container
+
+`docker export `` > backup-origin-20170322.tar`
+
+[[docker___lvm_konfiguration]]
+=== Docker - LVM Konfiguration
+
+# container_runtime_extra_storage as a group var.
+#container_runtime_extra_storage='[{"device":"/dev/vdc","path":"/var/lib/origin/openshift.local.volumes","filesystem":"xfs","options":"gquota"}]'
+
+[[docker_delete_images]]
+== Docker delete Images
+
+[source,bash]
+----
+$ docker images
+REPOSITORY                                            TAG                 IMAGE ID            CREATED             SIZE
+docker.io/sameersbn/gitlab                            latest              b5e4c613a084        3 days ago          1.288 GB
+docker.io/sameersbn/gitlab                            ``              bd8946189a6a        4 weeks ago         1.128 GB
+
+docker rmi bd8946189a6a
+----
+
+[[switch_to_the_container]]
+== Switch to the container
+
+[source,bash]
+----
+docker exec -it <> bash
+----
+
+[[list_exited_conatiners_docker_1.13]]
+== List exited conatiners
+
+Requires minimum Docker 1.13 which is standard for OpenShift 3.11.
+
+[source,bash]
+----
+docker container prune -f
+----
+
+https://lebkowski.name/docker-volumes/[1]
+
+[[docker_delete_unneded_volumes_docker_1.13]]
+== Docker delete unneded volumes
+
+Requires minimum Docker 1.13 which is standard for OpenShift 3.11.
+
+[source,bash]
+----
+docker image prune -a -f
+----
+
+[[docker_pull]]
+== Docker Pull
+
+[source,bash]
+----
+# docker pull docker.io/sameersbn/redis
+Using default tag: latest
+Trying to pull repository docker.io/sameersbn/redis ...
+latest: Pulling from docker.io/sameersbn/redis
+30d541b48fc0: Pull complete
+8ecd7f80d390: Pull complete
+46ec9927bb81: Pull complete
+2e67a4d67b44: Pull complete
+7d9dd9155488: Pull complete
+14d49618a9fd: Pull complete
+1c2236f46b9a: Pull complete
+b8f443d221cd: Pull complete
+Digest: sha256:f3dce9b348ae1ed4419531b094c3dfa35f44d48565f89b3abd94b18c411c0734
+----
+
+[[docker_auto_start_container]]
+== Docker Auto Start Container
+
+The following example starts a Redis container and configures it to
+always restart unless it is explicitly stopped or Docker is restarted.
+
+[source,bash]
+----
+docker run -dit --restart unless-stopped origin
+----
+
+[[switch_to_overlay2]]
+== Switch to Overlay2
+
+[source,bash]
+----
+systemctl stop docker
+rm /var/lib/docker/* -rf
+lvm lvremove cah/docker-pool
+ # Reallocate space to the root - tweak how much to your liking
+lvm lvextend -r -l +50%FREE atomicos/root
+echo STORAGE_DRIVER=overlay2 >> /etc/sysconfig/docker-storage-setup
+rm /etc/sysconfig/docker-storage
+systemctl start docker
+----

@@ -1,0 +1,294 @@
+= Atomic Host
+
+OpenShift 3.11 is the latest version, which will support Atomic Host. So it is recommended not to use Atomic Host for new installations.
+
+[[get_the_source]]
+== Get the source
+
+Download the qcow2 image from
+https://wiki.centos.org/SpecialInterestGroup/Atomic/Download/[1]
+
+Convert the qcow2 image to an vmdk
+
+[source,bash]
+----
+qemu-img convert -f qcow2 -O vmdk CentOS-Atomic-Host-7.1702-GenericCloud.qcow2 CentOS-Atomic-Host-7.1702-GenericCloud.vmdk
+----
+
+Create a VM template
+
+* Name: CentOS-Atomic-Host-7.1702-GenericCloud
+* Operating System: Red Hat Enterprise 7
+* CPU: 1
+* MEM: 2 GiB
+* Network: [VMXNET3]
+* SCSI-Controller: VMware Paravirtuell
+* Remove Disk Drive
+* Stay on BIOS instant of EFI, because the image does not work for EFI
+* Attach the Image
+
+[source,bash]
+----
+rpm-ostree install open-vm-tools ntp
+----
+
+[source,bash]
+----
+yum install wget git net-tools
+----
+
+. {blank}
+.. bind-utils iptables-services bridge-utils bash-completion
+
+We can use curl and python to download and install Pip.
+
+[source,bash]
+----
+yum install gcc python-devel openssl-devel
+----
+
+[source,bash]
+----
+curl "https://bootstrap.pypa.io/get-pip.py" -o "get-pip.py"
+python get-pip.py
+rm get-pip.py
+----
+
+[source,bash]
+----
+pip install --upgrade ansible==2.6.20
+
+git clone https://github.com/openshift/openshift-ansible
+
+yum install bind
+----
+
+[[open_vm_tools]]
+== Open VM Tools
+
+To install the Open VM Tools with the respecting rpm-ostree package:
+
+[source,bash]
+----
+rpm-ostree install open-vm-tools
+----
+
+[[redhat_certificates]]
+== Redhat certificates
+
+[source]
+----
+Trying to pull repository registry.access.redhat.com/rhel7/etcd ... 
+open /etc/docker/certs.d/registry.access.redhat.com/redhat-ca.crt: no such file or directory
+----
+
+[source,bash]
+----
+curl https://github.com/candlepin/python-rhsm/blob/master/etc-conf/ca/redhat-uep.pem > /etc/docker/certs.d/registry.access.redhat.com/redhat-ca.crt
+----
+
+[[haproxy_installieren]]
+== HAProxy
+
+[source,bash]
+----
+docker pull haproxy:alpine
+
+mkdir /etc/haproxy
+vi /etc/haproxy/haproxy.cfg
+----
+
+[source]
+----
+global
+  daemon
+  maxconn 256
+
+defaults
+  mode http
+  timeout connect 5000ms
+  timeout client 50000ms
+  timeout server 50000ms
+
+frontend https-in
+  bind *:443
+  option tcplog
+  mode tcp
+  default_backend https-servers
+
+backend https-servers
+  mode tcp
+  balance roundrobin
+  option ssl-hello-chk
+  server server1 192.168.1.5:30000
+
+frontend http-in
+  bind *:80
+  default_backend http-servers
+
+backend http-servers
+  server server1 192.168.1.5:30001
+----
+
+[source,bash]
+----
+docker run -dit --restart unless-stopped -v /etc/haproxy:/usr/local/etc/haproxy:ro -p 80:80 -p 443:443 haproxy:1.7-alpine
+----
+
+== Base configuration
+
+The node must be registered in the DNS or at least in the hosts file.
+
+/etc/hosts
+
+`192.168.1.1 osm001.localdomain`
+
+/etc/resolv.conf
+
+`nameserver 8.8.8.8`
+
+[[atomic_host_upgrade]]
+== Atomic Host Upgrade
+
+[source,bash]
+----
+atomic host status
+ostree admin undeploy 1
+ostree admin cleanup
+atomic host upgrade
+----
+
+[[extend_the_root_filesystem]]
+== Extend the root filesystem
+
+Add some more disk space on hypervisor level
+
+[source,bash]
+----
+echo "- - -" > /sys/class/scsi_host/host0/scan
+pvresize /dev/sda2
+lvextend -r -l +100%FREE /dev/mapper/cah-root
+----
+
+or
+
+[source,bash]
+----
+lvextend --size +1G /dev/mapper/cah-root
+----
+
+or extend and the file system
+
+[source,bash]
+----
+lvextend -r --size +1G /dev/mapper/cah-root
+----
+
+[[test_tcp_port]]
+== Test TCP Port
+
+`nc`
+
+[[disable_ip_tables_firewall]]
+== Disable IP Tables Firewall
+
+[source,bash]
+----
+systemctl disable iptables
+----
+
+[[enable_and_start_ip_tables]]
+== Enable and start IP Tables
+
+[source,bash]
+----
+systemctl enable iptables
+systemctl start iptables
+----
+
+[[dns_incoming]]
+== DNS Incoming
+
+[source,bash]
+----
+iptables -I INPUT 1 -p tcp -m tcp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -I INPUT 2 -p udp -m udp --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+----
+
+[[dns_outgoing]]
+== DNS Outgoing
+
+[source,bash]
+----
+iptables -A OUTPUT -p tcp -m tcp --sport 53:65535 --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+iptables -A OUTPUT -p udp -m udp --sport 53:65535 --dport 53 -m state --state NEW,ESTABLISHED -j ACCEPT
+----
+
+[[save_ip_table_rules]]
+== Save IP Table Rules
+
+[source,bash]
+----
+service iptables save
+----
+
+or
+
+[source,bash]
+----
+/usr/libexec/iptables/iptables.init save
+----
+
+[[upgrade_to_openshift_3.11]]
+== Upgrade to OpenShift 3.11
+
+Pre-fetch images:
+
+[source,bash]
+----
+atomic pull --storage=ostree docker:openshift/origin-node:v3.11
+----
+
+[[atomic_repository]]
+== Atomic Repository
+
+The ideas got from
+http://gbraad.nl/blog/deployment-of-ceph-using-custom-atomic-images.html[deployment-of-ceph-using-custom-atomic-images],
+https://rpm-ostree.readthedocs.io/en/latest/manual/compose-server/[compose-server]
+and
+https://ostree.readthedocs.io/en/latest/manual/buildsystem-and-repos/[buildsystem-and-repos]
+
+Include the Atomic Repo for ostree and rpm-ostree.
+
+Init the repo
+
+[source,bash]
+----
+mkdir build-repo
+ostree --repo=build-repo init --mode=bare-user
+mkdir repo
+ostree --repo=repo init --mode=archive-z2
+----
+
+Compose tree
+
+[source,bash]
+----
+rpm-ostree compose tree --repo=repo ceph-atomic/ceph-atomic-host.json
+----
+
+Simple HTTP
+
+[source,bash]
+----
+python -m SimpleHTTPServer
+----
+
+Deployment
+
+[source,bash]
+----
+ostree remote add --no-gpg-verify atomic-ceph http://10.3.0.2:8000/
+rpm-ostree rebase atomic-ceph:centos-atomic-host/7/x86_64/ceph-luminous
+systemctl reboot
+----

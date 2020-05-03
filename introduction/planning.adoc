@@ -1,0 +1,40 @@
+= Planning and Goals
+
+= Requirements Overview
+
+.Table Business Requirements
+|===
+|ID|Category|Requirements
+
+|BR01
+|Infrstucture
+|The cluster is build on AWS
+
+|BR02
+|Norm
+|The naming convention requires following the customers guidelines.
+
+|BR03
+|Infrastructure
+|The customer golden image needs to be used.
+
+|BR04
+|Infrastructure
+|The DNS zone cluster.local must be used.
+
+|BR05
+|Infrastructure
+|OpenShift 3 requires RHEL 7.x as an base operating system.
+
+|BR06
+|Network
+|An IP range /24 is required.
+
+|BR07
+|Infrastructure
+|An cloudprovider supported infrastructure AWS, vSphere is requried.
+
+|BR08
+|Infrastructure
+|The cloud provider does deliver the load balancer.
+|===

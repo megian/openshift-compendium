@@ -1,0 +1,6 @@
+= Installation
+
+include::image.adoc[leveloffset=+1]
+include::basesetup.adoc[leveloffset=+1]
+include::atomic.adoc[leveloffset=+1]
+include::OKD.adoc[leveloffset=+1]

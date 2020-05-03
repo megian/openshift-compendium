@@ -1,0 +1,29 @@
+= Assumptions, Risks, and Constraints
+
+.Table Constraints
+|===
+|ID|Category|Design Constraints
+
+|C01
+|Infrasturcture
+|The infrasturcture has sufficient resources for the cluster workload.
+|===
+
+.Table Assumptions
+|===
+|ID|Category|Design Assumptions
+
+|A01
+|Storage
+|An cloudprovider based storage is available.
+|===
+
+.Table Risks and Mitigations
+|===
+|ID|Category|Risk Description|Impact|Mitigation
+|RM01
+|Unknown workload
+|The workload is not measured
+|Low
+|Starting with a low utilization to seat in.
+|===

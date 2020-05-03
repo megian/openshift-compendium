@@ -1,0 +1,329 @@
+= kube-vip-overview
+
+.kube-vip-overview http://plantuml.com/deployment-diagram
+[plantuml, kube-vip-overview, png]
+----
+@startuml
+
+node "Admin" as client
+
+node "Master 1" as master1 {
+  component "kube-vip" as master1_kube_vip
+  component "kube-apiserver [192.168.1.11:8443]" as master1_kube_apiserver
+}
+node "Master 2" as master2 {
+  component "kube-vip (192.168.1.1:8443)" as master2_kube_vip
+  component "kube-apiserver (192.168.1.12:8443)" as master2_kube_apiserver
+}
+node "Master 3" as master3 {
+  component "kube-vip" as master3_kube_vip
+  component "kube-apiserver (192.168.1.13:8443)" as master3_kube_apiserver
+}
+
+client ..> master1_kube_vip
+client --> master2_kube_vip
+client ..> master3_kube_vip
+
+master1_kube_vip --> master1_kube_apiserver
+master1_kube_vip --> master2_kube_apiserver
+master1_kube_vip --> master3_kube_apiserver
+master2_kube_vip --> master1_kube_apiserver
+master2_kube_vip --> master2_kube_apiserver
+master2_kube_vip --> master3_kube_apiserver
+master3_kube_vip --> master1_kube_apiserver
+master3_kube_vip --> master2_kube_apiserver
+master3_kube_vip --> master3_kube_apiserver
+
+@enduml
+----
+
+= Deployment View
+
+.Deployment blackbox view http://plantuml.com/deployment-diagram
+[plantuml, deployment-blackbox-view, png]
+----
+@startuml
+
+skinparam handwritten true
+
+frame "deployment OpenShift cluster - blackbox view" {
+
+  rectangle "Client" <<location>>{
+    node "Client computer" <<device>> as client #LawnGreen
+  }
+
+  cloud Internet as internet #Aqua
+
+  rectangle "Service provider" <<location>> {
+    node "Load Balancer ingress {2,3}" <<Load Balancer Layer 4>> as lbingress #Orange
+    node "Load Balancer Kubernetes API external {2,3}" <<Load Balancer L4>> as lbext #Orange
+    node "Load Balancer Kubernetes API internal {2,3}" <<Load Balancer L4>> as lbint #Orange
+    node "OpenShift Master {2ℕ₀+1}" <<device>> as master #LawnGreen
+    node "OpenShift Node {ℕ₀}" <<device>> as node #LawnGreen
+    node "Bastion Node {1}" <<device>> as bastion #LawnGreen
+  }
+}
+
+internet --> bastion: <<protocol>> SSH
+bastion --> master: <<protocol>> SSH
+bastion --> node: <<protocol>> SSH
+
+client --> internet: <<protocol>> HTTP(S)\n<<protocol>> SSH
+
+internet --> lbingress: <<protocol>> HTTP(S)
+internet --> lbext: <<protocol>> HTTPS
+
+lbext --> master: <<protocol>>KubeAPI
+lbint --> master: <<protocol>>KubeAPI
+lbingress --> node: <<protocol>>HTTPS
+
+node --> lbint: KubeAPI int <<protocol>>
+master --> lbint: <<protocol>> REST
+master --> node: Kubelet <<protocol>>
+
+@enduml
+----
+
+*Components:*
+
+Client computer:: Device the client traffic is inititiating sessions to the OpenShift cluster
+
+Load Balancer ingress:: Incomming traffic will be forwarded to the OpenShift Nodes a router pod is running.
+
+Kubernetes API:: The
+
+.Deployment whitebox management view http://plantuml.com/deployment-diagram
+[plantuml, deployment-whitebox-view2, png]
+----
+@startuml
+
+skinparam handwritten true
+
+frame "deployment OpenShift Cluster - overview" {
+
+  rectangle "Client" <<location>>{
+    node "Client computer" <<device>> {
+      component "Webbrowser" as client_webbrowser
+      component "Kubectl (OC)" as client_kubectl
+      component "SSH" as client_ssh
+    }
+  }
+
+  cloud Internet as internet #Aqua
+
+  rectangle "Service provider" <<location>> {
+    node "Load Balancer ingress" <<Load Balancer L4>> as lb_ingress #Orange
+    node "Load Balancer Kubebernetes API external" <<Load Balancer L4>> as lb_external #Orange
+    node "Load Balancer Kubernetes API internal" <<Load Balancer L4>> as lb_internal #Orange
+    node "OpenShift Master {2ℕ₀+1}" <<device>> as master #LawnGreen {
+      node "RHEL/Atomic Host Master" <<OS>> #White {
+        component "SSH Server" as master_sshd
+        component "CRI-O or Docker" <<Container Runtime>> as master_container_runtime
+        component "kubelet" as master_kubelet
+        component "kube-proxy" as master_kube_proxy
+        component "etcd" as master_etcd
+        component "kube-apiserver" as master_kube_apiserver
+        component "kube-controller-manager" as master_kube_controller_manager
+        component "kube-scheduler" as master_kube_scheduler
+        component "kube-cloud-controller-manager" as master_kube_cloud_controller_manager
+      }
+    }
+    node "OpenShift Node" <<device>> as node #LawnGreen {
+      node "RHEL/Atomic Host Node" <<OS>> #White {
+        component "SSH Server" as node_sshd
+        component "CRI-O or Docker" as node_container_runtime
+        component "kubelet" as node_kubelet
+        component "kube-proxy" as node_kube_proxy
+        component "OpenShift Router" as node_router
+      }
+    }
+    node "Bastion Node" <<device>> #LawnGreen {
+      node "RHEL/Atomic Host Bastion Node" <<OS>> #White {
+        component "SSH Server" as bastionnode_sshd
+        component "ssh" as bastionnode_ssh
+        component "Ansible" as bastionnode_ansible
+      }
+  }
+}
+
+client_webbrowser --> internet: <<protocol>> HTTP(S)
+client_kubectl --> internet: <<protocol>> HTTPS
+client_ssh --> internet: <<protocol>> SSH
+
+internet --> lb_ingress: <<protocol>> HTTP(S)
+internet --> lb_external: <<protocol>> HTTPS
+internet --> bastionnode_sshd: <<protocol>> SSH
+
+master_kube_apiserver --> master_etcd
+master_kube_apiserver <--> master_kube_controller_manager
+master_kube_apiserver <--> master_kube_scheduler
+master_kube_apiserver <--> master_kube_cloud_controller_manager
+master_kube_apiserver <--> node_kubelet
+
+lb_ingress --> node_router: <<protocol>> HTTPS
+lb_external --> master_kube_apiserver: <<protocol>> REST
+lb_internal --> master_kube_apiserver: <<protocol>> REST
+
+bastionnode_ansible --> bastionnode_ssh
+bastionnode_ssh --> master_sshd: <<protocol>> SSH
+bastionnode_ssh --> node_sshd: <<protocol>> SSH
+
+master_kubelet --> lb_internal: <<protocol>> REST
+master_kubelet --> master_container_runtime
+master_kube_proxy --> lb_internal: <<protocol>> REST
+
+node_kubelet --> lb_internal: <<protocol>> REST
+node_kubelet --> node_container_runtime
+node_kube_proxy --> lb_internal: <<protocol>> REST
+
+@enduml
+----
+
+[plantuml, deployment-ssh, png]
+----
+@startuml
+
+skinparam handwritten true
+scale max 1024 width
+
+frame "deployment diagram" {
+
+  rectangle "Client" <<location>>{
+    node "Client computer" <<device>> {
+      component "SSH" as ssh
+    }
+  }
+
+  cloud Internet as internet
+
+  rectangle "Service provider" <<location>> {
+    node "bastion" <<Bastion Node>> as bastion {
+      component "SSH Server" as bastionsshd
+      component "SSH" as bastionssh
+    }
+    node "Master (2n+1)" <<OpenShift Master>> as master
+    node "Node (2n+1)" <<OpenShift Node>> as node
+  }
+}
+
+ssh --> internet: SSH
+
+internet --> bastionsshd
+bastionssh --> node: SSH
+bastionssh --> master: SSH
+
+@enduml
+----
+
+
+.Deployment http://plantuml.com/deployment-diagram
+[plantuml, deployment-external-ingress-view, png]
+----
+@startuml
+
+skinparam handwritten true
+
+cloud Internet as internet
+node "lb-router" <<Load Balancer Layer 4>> as lbrouter
+node "node" <<OpenShift Node>> as node
+
+internet <..> lbrouter
+node <..> lbrouter : HTTP(S)
+
+@enduml
+----
+
+.Deployment http://plantuml.com/deployment-diagram
+[plantuml, deployment-external-ingress-view-2, png]
+----
+@startuml
+
+skinparam handwritten true
+
+cloud "Internet" as internet #Aqua
+card "HTTP(S)" <<External Interface>> as lbext #Salmon
+node "LB1" <<Load Balancer Layer 4>> as lb1 #Orange
+node "LB2" <<Load Balancer Layer 4>> as lb2 #Orange
+node "LB3" <<Load Balancer Layer 4>> as lb3 #Orange
+card "HTTP(S)" <<Internal Interface>> as lbint #Salmon
+node "node1" <<OpenShift Node>> as node1 #LawnGreen
+node "node2" <<OpenShift Node>> as node2 #LawnGreen
+node "node3" <<OpenShift Node>> as node3 #LawnGreen
+
+internet #.. lbext
+lbext ..# lb1
+lbext ..# lb2
+lbext ..# lb3
+lb1 #.. lbint
+lb2 #.. lbint
+lb3 #.. lbint
+lbint ..# node1
+lbint ..# node2
+lbint ..# node3
+
+@enduml
+----
+
+
+HTTP(S):: Incomming traffic on port 80/TCP HTTP and 443/TCP HTTPS
+
+.Deployment http://plantuml.com/deployment-diagram
+[plantuml, deployment-internal-view, png]
+----
+@startuml
+
+node "lb-ext-1" <<Layer 4 Load Balancer>> as lbext1
+node "lb-ext-2" <<Layer 4 Load Balancer>> as lbext2
+node "lb-ext-3" <<Layer 4 Load Balancer>> as lbext3
+
+node "bastion1" <<OpenShift Bastion>> as bastion1
+node "lb-int-1" <<Layer 4 Load Balancer>> as lbint1
+node "lb-int-2" <<Layer 4 Load Balancer>> as lbint2
+node "lb-int-3" <<Layer 4 Load Balancer>> as lbint3
+node "master1" <<OpenShift Master>> as master1
+node "master2" <<OpenShift Master>> as master2
+node "master3" <<OpenShift Master>> as master3
+node "node1" <<OpenShift Node>> as node1
+node "node2" <<OpenShift Node>> as node2
+node "node3" <<OpenShift Node>> as node3
+
+master1 <..> lbext1 : KubeAPI-ext
+master1 <..> lbext2 : KubeAPI-ext
+master1 <..> lbext3 : KubeAPI-ext
+master2 <..> lbext1 : KubeAPI-ext
+master2 <..> lbext2 : KubeAPI-ext
+master2 <..> lbext3 : KubeAPI-ext
+master3 <..> lbext1 : KubeAPI-ext
+master3 <..> lbext2 : KubeAPI-ext
+master3 <..> lbext3 : KubeAPI-ext
+
+bastion1 <..> master1 : SSH
+bastion1 <..> master2 : SSH
+bastion1 <..> master3 : SSH
+bastion1 <..> node1 : SSH
+bastion1 <..> node2 : SSH
+bastion1 <..> node3 : SSH
+master1 <..> lbint1 : KubeAPI-int
+master1 <..> lbint2 : KubeAPI-int
+master1 <..> lbint3 : KubeAPI-int
+master2 <..> lbint1 : KubeAPI-int
+master2 <..> lbint2 : KubeAPI-int
+master2 <..> lbint3 : KubeAPI-int
+master3 <..> lbint1 : KubeAPI-int
+master3 <..> lbint2 : KubeAPI-int
+master3 <..> lbint3 : KubeAPI-int
+lbint1 <..> node1 : KubeAPI-int
+lbint1 <..> node2 : KubeAPI-int
+lbint1 <..> node3 : KubeAPI-int
+lbint2 <..> node1 : KubeAPI-int
+lbint2 <..> node2 : KubeAPI-int
+lbint2 <..> node3 : KubeAPI-int
+lbint3 <..> node1 : KubeAPI-int
+lbint3 <..> node2 : KubeAPI-int
+lbint3 <..> node3 : KubeAPI-int
+@enduml
+----
+
+SSH:: SSH on port 22/TCP
+KubeAPI-int:: Kubernetes API internal over HTTPS on port 8443/TCP
+KubeAPI-ext:: Kubernetes API external over HTTPS on port 443/TCP

@@ -1,0 +1,559 @@
+= Operation
+
+* Add permissions to the Admin user
+
+[source,bash]
+----
+oc login -u system:admin
+oc adm policy add-role-to-user system:image-builder admin
+oc adm policy add-role-to-user admin admin -n openshift
+----
+
+* Push Docker Images into the Docker Registry
+
+[source,bash]
+----
+docker load -i openshiftroadshow-parksmap-1.2.0.tar
+docker tag openshiftroadshow/parksmap:1.2.0 docker-registry.default.svc:5000/openshift/parksmap:1.2.0
+docker push docker-registry.default.svc:5000/openshift/parksmap:1.2.0
+----
+
+* Turn on / off DC triggers to make a number of changes and prevent a rollout
+
+[source,bash]
+----
+oc rollout pause dc <dc name>
+oc rollout resume dc <dc name> 
+----
+
+* Change an image
+
+[source,bash]
+----
+$ OC_EDITOR="vim" oc edit dc/ 
+
+spec:
+  containers:
+  - image: docker.io/openshiftdemos/gogs@sha256:<the new image digest from Image Stream>
+    imagePullPolicy: Always
+----
+
+* BuildConfig with source pull secrets
+
+[source,bash]
+----
+oc secrets new-basicauth gogs-basicauth --username= --password=
+oc set build-secret --source bc/tasks gogs-basicauth
+----
+
+* Create a configmap and mount them as volume
+
+[source,bash]
+----
+oc create configmap myconfigfile --from-file=./configfile.txt
+oc set volumes dc/printenv --add --overwrite=true --name=config-volume --mount-path=/data -t configmap --configmap-name=myconfigfile
+----
+
+* Create secrets per CLI
+
+[source,bash]
+----
+oc create secret generic mysec --from-literal=app_user=superuser --from-literal=app_password=topsecret
+oc set env dc/printenv --from=secret/mysec oc set volume dc/printenv --add --name=db-config-volume --mount-path=/dbconfig --secret-name=printenv-db-secret
+----
+
+* Configure Liveness / Readiness probes on DeploymentConfigs
+
+[source,bash]
+----
+oc set probe dc cotd1 --liveness -- echo ok
+oc set probe dc cotd1 --readiness --get-url=http://:8080/index.php --initial-delay-seconds=2
+----
+
+* Create a job
+
+[source,bash]
+----
+oc run pi --image=perl --replicas=1 --restart=OnFailure --command -- perl -Mbignum=bpi -wle 'print bpi(2000)'
+----
+
+* CRON JOB
+
+[source,bash]
+----
+oc run pi --image=perl --schedule='_/1 _ * * *' --restart=OnFailure --labels parent="cronjobpi" --command -- perl -Mbignum=bpi -wle 'print bpi(2000)'
+----
+
+* A / B deployments - split traffic between services
+
+[source,bash]
+----
+oc expose service cotd1 --name='abcotd' -l name='cotd'
+oc set route-backends abcotd --adjust cotd2=+20%
+oc set route-backends abcotd cotd1=50 cotd2=50
+----
+
+* Pull an image directly from the Red Hat registriy
+
+[source,bash]
+----
+docker pull registry.access.redhat.com/jboss-eap-6/eap64-openshift
+----
+
+* to validate an Openshift / Kubernates resource definition (json / yaml file) to find faulty / syntax problems
+
+[source,bash]
+----
+oc create --dry-run --validate -f openshift/template/tomcat6-docker-buildconfig.yaml
+----
+
+* Prune old objects
+ * https://docs.openshift.com/container-platform/3.11/admin_guide/pruning_resources.html
+
+* Activate Cluster Garbage Collection
+ * https://docs.openshift.com/container-platform/3.11/admin_guide/garbage_collection.html
+
+[source,bash]
+----
+oc whoami -t
+----
+
+* login via CLI `oc`
+
+[source,bash]
+----
+oc login --username=admin --insecure-skip-tls-verify --server=https://master-int.example.com:8443
+----
+
+* to display the cluster roles and their associated rule sets in the Cluster Policy
+
+[source,bash]
+----
+oc describe clusterpolicy default
+----
+
+* add a role to a user
+
+[source,bash]
+----
+oc adm policy add-role-to-user
+----
+
+* Add a cluster role
+
+[source,bash]
+----
+oc adm policy add-cluster-role-to-user
+----
+
+* Add a privileged role to launch a Docker image with root users within OpenShift. The parameter -z defines the service account
+
+[source,bash]
+----
+oc adm policy add-scc-to-user anyuid -z default
+----
+
+> for more details: https://docs.openshift.com/container-platform/3.11/security/deployment.html#security-deployment-sccs
+
+* Test a POD service locally
+
+[source,bash]
+----
+ip=`oc get pod hello-openshift -o jsonpath="{.status.podIP}"`
+curl http://${ip}:8080
+----
+
+* to access a container shell
+
+[source,bash]
+----
+oc rsh hello-openshift-1-xyzfg
+----
+
+* to edit an object / resource
+
+[source,bash]
+----
+oc edit dc mydeploymentconfig
+----
+
+* Add a `PersistentVolumeClaim` to a` DeploymentConfig`
+
+[source,bash]
+----
+oc set volume dc docker-registry --add --overwrite -t persistentVolumeClaim --claim-name=registry-claim --name=registry-storage
+----
+
+ * Docker builder app creation
+ 
+[source,bash]
+----
+oc new-app --docker-image=openshift/hello-openshift:v1.0.6 -l "todelete=yes"
+----
+
+* To create an app using a template (`eap64-basic-s2i`): Ticketmonster demo
+
+[source,bash]
+----
+oc new-app javaee6-demo oc new-app --template=eap64-basic-s2i -p=APPLICATION_NAME=ticketmonster,SOURCE_REPOSITORY_URL=https://github.com/jboss-developer/ticket-monster,SOURCE_REPOSITORY_REF=2.7.0.Final,CONTEXT_DIR=demo
+----
+
+* STI app
+
+[source,bash]
+----
+oc new-app openshift/php~https://github.com/openshift/sti-php -l "todelete=yes"
+----
+
+ * To see a build process log
+
+[source,bash]
+----
+oc get builds
+oc logs -f builds/sti-php-1
+----
+
+* To create an application with the git repository in the current directory:
+
+[source,bash]
+----
+oc new-app
+----
+
+* To create an application using the remote git repository and the context subdirectory:
+
+[source,bash]
+----
+oc new-app https://github.com/openshift/sti-ruby.git --context-dir=2.0/test/puma-test-app
+----
+
+* To create an application with a remote git repository with a specific branching reference:
+
+[source,bash]
+----
+oc new-app https://github.com/openshift/ruby-hello-world.git#beta4
+----
+
+* New app from the source code
+
+> Build strategy Detection
+>
+> When new-app finds a Docker file in the repository, it uses the Docker creation strategy. Otherwise, new-app uses the source strategy
+>
+> To set a strategy, set `--strategy flag` to source or docking window
+> Example: Forcing the docker strategy for the local source repository with new-app:
+  
+[source,bash]
+----
+oc new-app /home/user/code/myapp --strategy=docker
+----
+
+* to create a definition generated by the command 'oc new-app' based on S2I support
+
+[source,bash]
+----
+oc new-app https://github.com/openshift/simple-openshift-sinatra-sti.git -o json | tee ~/simple-sinatra.json
+----
+
+* To create an application from a MySQL image in Docker Hub
+
+[source,bash]
+----
+oc new-app mysql
+----
+
+* To create an application from the local registry:
+
+[source,bash]
+----
+oc new-app myregistry:5000/example/myimage
+----
+
+> If the registry from which the image originated is not secured with SSL, cluster administrators must ensure that the Docker daemon is running on the OpenShift Enterprise node with the --secure registry flag pointing to that registry. You must also use the --insecure-registry = true flag to tell new-app that the image came from an insecure registry.
+
+* To create an application from a saved template:
+
+[source,bash]
+----
+oc create -f examples/sample-app/application-template-stibuild.json
+oc new-app ruby-helloworld-sample
+----
+
+* To set environment variables when creating an application for the database image:
+
+[source,bash]
+----
+oc new-app centos/postgresql-96-centos7 -e POSTGRESQL_USER=user -e POSTGRESQL_DATABASE=db -e POSTGRESQL_PASSWORD=password
+----
+
+* To output new app artifacts to a file, edit them and then create them with oc create:
+
+[source,bash]
+----
+oc new-app https://github.com/openshift/ruby-hello-world -o json > myapp.json 
+$ vi myapp.json
+oc create -f myapp.json
+----
+
+* To deploy two images in a single pod:
+
+[source,bash]
+----
+oc new-app nginx+mysql
+----
+
+* To jointly deploy an image created from the source image and the external image:
+
+[source,bash]
+----
+oc new-app ruby~https://github.com/openshift/ruby-hello-world mysql --group=ruby+mysql
+----
+
+* to export all project objects / resources:
+
+[source,bash]
+----
+oc get --export imagestreams,deploymentconfigs,buildconfigs,services,routes,serviceaccount
+----
+
+> You can also replace a specific resource type or multiple resources instead of all. Run oc export -h for more information.
+
+* to create an app that uses `oc` CLI based on a `template`
+
+[source,bash]
+----
+oc new-app --template=mysql-ephemeral --param=MYSQL_USER=mysqluser,MYSQL_PASSWORD=redhat,MYSQL_DATABASE=mydb,DATABASE_SERVICE_NAME=database
+----
+
+* to see a list of `env vars` defined in a DeploymentConfig object
+
+[source,bash]
+----
+oc set env dc database --list # deploymentconfigs database, container
+mysql MYSQL_USER=**_ MYSQL_PASSWORD=_** MYSQL_DATABASE=***
+----
+
+* to manage environment variables in different pose object types.
+The first one adds with value / data. The second update with value / opt.
+
+[source,bash]
+----
+oc set env dc registry STORAGE=/data
+oc set env dc registry --overwrite STORAGE=/opt
+----
+
+To clear the environment variables in the pod templates:
+
+[source,bash]
+----
+oc set env KEY_1- ... KEY_N- []
+----
+
+> The final hyphen (-, U + 2D) is required.
+
+In this example, the environment variables ENV1 and ENV2 are removed from the deployment configuration d1:
+
+[source,bash]
+----
+oc set env dc d1 ENV1- ENV2-
+----
+
+This removes the environment variable ENV from all replication controllers:
+
+[source,bash]
+----
+oc set env rc --all ENV-
+----
+
+This removes the environment variable ENV from the c1 container for the replication controller r1:
+
+To list environment variables in pods or pod templates:
+
+[source,bash]
+----
+oc set env rc r1 --containers='c1' ENV-
+----
+
+This example lists all environment variables for pod p1:
+
+[source,bash]
+----
+oc set env --list []
+oc set env pod/p1 --list
+----
+
+* change an attribute (patch)
+
+[source,bash]
+----
+oc patch dc dc1 -p '{"spec":{"template":{"spec":{"nodeSelector":{"nodeLabel":"logging-es-node-1"}}}}}'
+----
+
+* use a volume storage
+
+[source,bash]
+----
+oc set volume dc dc1 --add --overwrite --name= --type=persistentVolumeClaim --claim-name=
+----
+
+* to make a node in a cluster non-schedulebar
+
+[source,bash]
+----
+oc adm cordon node
+----
+
+* Build the build
+
+[source,bash]
+----
+$ cat ./path/to/your/Dockerfile | oc new-build --name=build-from-docker --binary --strategy=docker -l app=app-from-custom-docker-build -D -
+----
+
+* Docker build process must give a source directory
+
+[source,bash]
+----
+oc start-build build-from-docker --from-dir=. --follow
+----
+
+Create an OSE app from a Docker build
+
+[source,bash]
+----
+oc new-app app-from-custom-docker-build -l app=app-from-custom-docker-build
+
+oc expose service app-from-custom-docker-build
+----
+
+* Copy files to / from a POD
+
+[[ref-httpsdocs.openshift.orglatestdev_guidecopy_files_to_container.html]]
+Ref:
+https://docs.okd.io/latest/dev_guide/copy_files_to_container.html
+
+[source,bash]
+----
+oc rsync /home/user/source devpod1234:/src
+
+oc rsync devpod1234:/src /home/user/source
+----
+
+* Adjust the master log level
+
+To customize the Openshift master log level, edit the following line of `/etc/origin/master/master.env` from the master VM:
+
+[source]
+----
+OPTIONS=--loglevel=4
+----
+
+To make changes effective, restart the OpenShift Master services:
+
+[source,bash]
+----
+master-restart api
+master-restart controllers
+----
+
+To provide filtered information in the nodes:
+
+[source,bash]
+----
+journalctl -f -u atomic-openshift-node
+----
+or
+[source,bash]
+----
+journalctl -f -u origin-node
+----
+
+ * Use "oc new-app" with the "-o json" option to load your new template definition file
+
+
+[source,bash]
+----
+oc process --parameters=true -n openshift mysql-persistent
+----
+
+* Run the diagnosis
+
+[source,bash]
+----
+oc adm diagnostics
+oc adm policy reconcile-cluster-roles --additive-only=false --confirm
+----
+
+* Stop and start static pods
+
+Static pods are running as long as the pod definition file is in `/etc/origin/node/pods/`. To stop the pods the file has to be deleted or moved out of the directory. Once removed the pod is terminated automatically by the kubelet.
+
+* To stop static pods:
+
+[source,bash]
+----
+mkdir -p /etc/origin/node/pods-stopped
+mv /etc/origin/node/pods/* /etc/origin/node/pods-stopped/
+----
+
+To start the static pods again:
+
+[source,bash]
+----
+mv /etc/origin/node/pods-stopped/* /etc/origin/node/pods/
+----
+
+* Health Check Etcd
+
+[source,bash]
+----
+/usr/local/bin/master-exec etcd etcd etcdctl --cert-file /etc/etcd/peer.crt --key-file /etc/etcd/peer.key --ca-file /etc/etcd/ca.crt -C https://master1.example.com:2379 cluster-health
+----
+
+* Get all Node Groups
+
+[source,bash]
+----
+$ oc -n openshift-node get configmap
+NAME                            DATA      AGE
+node-config-all-in-one          1         1d
+node-config-all-in-one-crio     1         1d
+node-config-compute             1         1d
+node-config-compute-crio        1         1d
+node-config-infra               1         1d
+node-config-infra-crio          1         1d
+node-config-master              1         1d
+node-config-master-crio         1         1d
+node-config-master-infra        1         1d
+node-config-master-infra-crio   1         1d
+----
+
+* Set the node labels node-role.kubernetes.io/master=true and node-role.kubernetes.io/compute=true are set automatically by the openshift-ansible playbooks.
+
+*node-role.kubernetes.io/master=true*
+
+The label can be applied with the command:
+
+[source,bash]
+----
+oc label node node1 node-role.kubernetes.io/master=true
+----
+
+*node-role.kubernetes.io/compute=true*
+
+The label can be applied with the command:
+
+[source,bash]
+----
+oc label node node1 node-role.kubernetes.io/compute=true
+----
+
+* Set Gluster Voume for docker-registry
+
+[source,bash]
+----
+oc set volume deploymentconfigs/docker-registry -n default --add \
+   --name=registry-storage -t pvc \
+   --claim-name=registry-storage \
+   --overwrite
+----

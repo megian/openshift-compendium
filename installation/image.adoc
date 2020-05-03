@@ -1,0 +1,74 @@
+= Build Base Image
+
+The image is automatically created by a script. Requires https://www.packer.io [Packer] from Hashicorp and VMware Workstation Pro. Reason for the using of CentOS is the support of SELinux, which is required by OpenShift.
+
+.Attribute
+|===
+|Attribut |Description
+
+|ISO
+|http://mirror.init7.net/centos/7.7.1908/isos/x86_64/CentOS-7-x86_64-DVD-1908.iso
+
+|SHA256
+|9bba3da2876cb9fcf6c28fb636bcbd01832fe6d84cd7445fa58e44e569b3b4fe
+
+|Keyboard
+|en-US
+
+|Lang
+|en-US
+
+|Timezone
+|Etc/UTC
+
+|===
+
+== Minimal
+
+After installation, a system update is performed.
+
+[source,bash]
+----
+yum makecache
+yum update
+----
+
+== Install Ansible
+
+The openshift-ansible playbooks do require Ansible >= 2.6. 
+
+[source,bash]
+----
+yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+yum install -y ansible
+----
+
+[source,bash]
+----
+yum install -y pyOpenSSL python-cryptography python-lxml ansible yum-utils
+----
+
+If NFS is used in the containers, the following SELinux settings must be set to access the NFS server from the OpenShift Nodes:
+
+[source,bash]
+----
+setsebool -P virt_use_nfs 1
+setsebool -P virt_sandbox_use_nfs 1
+----
+
+Docker is reconfigured, it is automatically started at each system startup and then started.
+
+[source,bash]
+----
+systemctl enable docker
+systemctl start docker
+----
+
+Packer creates the image based on the JSON template.
+
+[source,bash]
+----
+packer build CentOS-7-1908-OpenShift-Template.json
+----
+
+The detailed configuration files are included in the appendix.

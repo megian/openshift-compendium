@@ -1,0 +1,202 @@
+= Gluster
+
+This example is based on Heketi, which tends to cause inconsistency between the gluster volumes defined in the Heketi DB and the real Gluster servers.
+https://kadalu.io/[Kadalu] is going to succeed Heketi for Kubernetes Gluster deployments, but is not available for OpenShift 3.11.
+
+So this documentation is for legacy systems only and should not be used for new installations.
+
+== References
+
+* https://docs.openshift.com/container-platform/3.11/scaling_performance/optimizing_on_glusterfs_storage.html[Postgres
+and MongoDB on Gluster]
+
+[[openshift_integrated]]
+== OpenShift integrated
+
+Wipe a device from all definitions.
+
+[source,bash]
+----
+pvremove /dev/sdx
+wipefs -a -f /dev/sdx
+pvscan --cache
+----
+
+Example of a Heketi topology template:
+
+[source,json]
+----
+{
+"clusters": [{
+    "nodes": [{
+         "node": {
+           "hostnames": {
+             "manage": ["node1"],
+             "storage": ["192.168.1.11"]
+           },
+           "zone": 1
+         },
+         "devices": ["/dev/sda"]
+       },{
+         "node": {
+           "hostnames": {
+             "manage": ["node2"],
+             "storage": ["192.168.1.12"]
+           },
+           "zone": 1
+         },
+         "devices": ["/dev/sda"]
+       },{
+         "node": {
+           "hostnames": {
+             "manage": ["node3"],
+             "storage": ["192.168.1.13"]
+           },
+           "zone": 1
+         },
+         "devices": ["/dev/sda"]
+       }]
+   }]
+
+}
+----
+
+[[check_heketidbstorage]]
+== Check heketidbstorage
+
+[heketi] ERROR 2017/12/30 13:44:55
+/src/github.com/heketi/heketi/apps/glusterfs/app.go:157: read-only file
+system ERROR: Unable to start application
+
+----
+gluster> volume heal heketidbstorage info
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_ad615b5d6ac31708d68fe63715c019zd/brick_ee508514d7a5695833a8f70877f67bce/brick
+Status: Connected
+Number of entries: 0
+ 
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_1470d23b5671353e9940177a128cb37f/brick_03a5a48136a103ff7e80bc183b3f3e0a/brick
+Status: Connected
+Number of entries: 0
+ 
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_be615f9683943b1c2466a59b9515475e/brick_50636d01fbfed2df735f8d4858735b96/brick
+Status: Connected
+Number of entries: 0
+----
+
+[[check_heketidbstorage_split_brain]]
+== Check heketidbstorage Split-Brain
+
+----
+gluster> volume heal heketidbstorage info split-brain
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_ad615b5d6ac31708d68fe63715c019zd/brick_ee508514d7a5695833a8f70877f67bce/brick
+Status: Connected
+Number of entries in split-brain: 0
+ 
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_1470d23b5671353e9940177a128cb37f/brick_03a5a48136a103ff7e80bc183b3f3e0a/brick
+Status: Connected
+Number of entries in split-brain: 0
+ 
+Brick 192.168.x.x:/var/lib/heketi/mounts/vg_be615f9683943b1c2466a59b9515475e/brick_50636d01fbfed2df735f8d4858735b96/brick
+Status: Connected
+Number of entries in split-brain: 0
+----
+
+[[verify_gluster_volumes_are_healty]]
+=== Verify gluster volumes are healty
+
+Verify that all gluster volumes are healty:
+
+[source,bash]
+----
+gluster volume list | xargs -I {} gluster volume heal {} info
+----
+
+or
+
+[source,bash]
+----
+for i in $(gluster volume list); do gluster volume heal $i info; done
+----
+
+[[workaround_read_only_db_heketi]]
+== Workaround read only DB Heketi
+
+You may get the error:
+
+----
+Setting up heketi database
+touch: cannot touch '/var/lib/heketi/test': Read-only file system
+/var/lib/heketi is read-only
+----
+
+To relase the lock, scale down to 0 and back to 1.
+
+[source,bash]
+----
+oc scale -n glusterfs --replicas=0 dc heketi-storage
+oc scale -n glusterfs --replicas=1 dc heketi-storage
+----
+
+[[volume_list]]
+== Volume list
+
+[source,bash]
+----
+heketi-cli -s http://localhost:8080 --user admin --secret Kg/HaXlswldorx1RtaV8AXC48fo2miJMK2yeASob2WA= volume list
+----
+
+[[optimize_for_databases]]
+== Optimize for databases
+
+For the Gluster versions 3.12, 4.1 and 5 the following options are
+recommended:
+
+https://docs.okd.io/3.11/scaling_performance/optimizing_on_glusterfs_storage.html#Guidance-For-Databases#Guidance-For-Databases[Containerized GlusterFS Guidance for Databases] and in the original https://github.com/gluster/glusterfs/blob/release-5/extras/group-db-workload
+
+[source,bash]
+----
+GLUSTER_VOLUME=
+gluster volume set ${GLUSTER_VOLUME} performance.stat-prefetch off
+gluster volume set ${GLUSTER_VOLUME} performance.read-ahead off
+gluster volume set ${GLUSTER_VOLUME} performance.write-behind off
+gluster volume set ${GLUSTER_VOLUME} performance.readdir-ahead off
+gluster volume set ${GLUSTER_VOLUME} performance.io-cache off
+gluster volume set ${GLUSTER_VOLUME} performance.quick-read off
+gluster volume set ${GLUSTER_VOLUME} performance.open-behind off
+gluster volume set ${GLUSTER_VOLUME} performance.strict-o-direct on
+
+gluster volume info ${GLUSTER_VOLUME}
+----
+
+In Gluster 6 the recommendation has changed:
+https://github.com/gluster/glusterfs/blob/release-6/extras/group-db-workload
+
+[source,bash]
+----
+GLUSTER_VOLUME=
+gluster volume set ${GLUSTER_VOLUME} performance.stat-prefetch off
+gluster volume set ${GLUSTER_VOLUME} performance.read-ahead off
+gluster volume set ${GLUSTER_VOLUME} performance.write-behind off
+gluster volume set ${GLUSTER_VOLUME} performance.readdir-ahead off
+gluster volume set ${GLUSTER_VOLUME} performance.io-cache off
+gluster volume set ${GLUSTER_VOLUME} performance.quick-read off
+gluster volume set ${GLUSTER_VOLUME} performance.open-behind on
+gluster volume set ${GLUSTER_VOLUME} performance.strict-o-direct on
+gluster volume set ${GLUSTER_VOLUME} performance.client-io-threads on
+gluster volume set ${GLUSTER_VOLUME} server.event-threads 4
+gluster volume set ${GLUSTER_VOLUME} client.event-threads 4
+gluster volume set ${GLUSTER_VOLUME} performance.read-after-open yes
+
+gluster volume info ${GLUSTER_VOLUME}
+----
+
+[[find_the_brick_directory]]
+=== Find the brick directory
+
+[source,bash]
+----
+docker ps | grep glusterfs
+docker exec -ti k8s_glusterfs_glusterfs-storage-xxxx_glusterfs bash
+ps ax | grep vol_0000000000000000000000000000000
+cd /var/lib/heketi/mounts/vg_0000000000000000000000000000000/brick_0000000000000000000000000000000/
+----

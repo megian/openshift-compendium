@@ -1,0 +1,74 @@
+= NetworkPolicy
+
+== Add a default label for the default namespace
+
+If not already created. Add an default label to the default namespace:
+
+[source,bash]
+----
+oc label namespace default name=default
+----
+
+== Seperate the namespaces with network policies, but allow the default namespace to communicate
+
+This configuration is valid for Kubernets, OpenShift, OKD.
+
+[source,bash]
+----
+function networkpolicy-allow-from-same-namespace() {
+  if [ -z "$1" ]; then
+    echo "Enter the namespace you want to add the networkpolicy as first parameter"; return 1
+  fi
+
+  oc create --namespace "$1" -f - <<EOF
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: allow-from-same-namespace
+spec:
+  podSelector:
+  ingress:
+  - from:
+    - podSelector: {}
+EOF
+}
+
+function networkpolicy-allow-from-default-namespace() {
+  if [ -z "$1" ]; then
+    echo "Enter the namespace you want to add the networkpolicy as first parameter"; return 1
+  fi
+
+  oc create --namespace "$1" -f - <<EOF
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: allow-from-default-namespace
+spec:
+  podSelector:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+EOF
+}
+
+function networkpolicy-allow-from-same-and-default-namespace() {
+  if [ -z "$1" ]; then
+    echo "Enter the namespace you want to add the networkpolicies as first parameter"; return 1
+  fi
+
+  networkpolicy-allow-from-same-namespace $1
+  networkpolicy-allow-from-default-namespace $1
+}
+
+networkpolicy-allow-from-same-namespace <myproject>
+networkpolicy-allow-from-default-namespace <myproject>
+---
+
+or
+
+[source,bash]
+----
+networkpolicy-allow-from-same-and-default-namespace <myproject>
+----

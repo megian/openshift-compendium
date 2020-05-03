@@ -1,0 +1,171 @@
+[[migrate_network_plugin_from_redhat_ovs_subnet_to_redhat_ovs_networkpolicy]]
+== Migrate network plugin from redhat-ovs-subnet to redhat-ovs-networkpolicy
+
+*Review the current configuration:*
+
+[source,bash]
+----
+$ oc get clusternetwork
+NAME      CLUSTER NETWORKS   SERVICE NETWORK   PLUGIN NAME
+default   10.128.0.0/14:9    172.30.0.0/16     redhat/openshift-ovs-subnet
+----
+
+[source,bash]
+----
+$ oc get hostsubnets
+NAME                  HOST                  HOST IP        SUBNET          EGRESS CIDRS   EGRESS IPS
+node1                 node1                 192.168.1.50   10.128.0.0/23   []             []
+node2                 node2                 192.168.1.51   10.129.0.0/23   []             []
+node3                 node3                 192.168.1.52   10.130.0.0/23   []             []
+----
+
+[source,bash]
+----
+$ oc get netnamespaces
+No resources found.
+----
+
+*Steps to migrate to the network policy plugin:*
+
+1. Change the networkplugin in the Ansible inventory:
+
+[source,bash]
+----
+os_sdn_network_plugin_name='redhat/openshift-ovs-networkpolicy'
+----
+
+2. Change the networkplugin in the openshift node group configmaps:
+
+[source,bash]
+----
+$ oc edit configmap node-config-{compute,master,infra} -n openshift-node
+----
+
+[source,yaml]
+----
+data:
+  node-config.yaml: |
+    networkConfig:
+      networkPluginName: redhat/openshift-ovs-networkpolicy
+----
+
+3. Change the networkPluginName parameter on all masters and nodes in their configuration files.
+
+[source,bash]
+----
+sed -i.bak-networkpolicy s/openshift-ovs-subnet/openshift-ovs-networkpolicy/g /etc/origin/master/master-config.yaml
+sed -i.bak-networkpolicy s/openshift-ovs-subnet/openshift-ovs-networkpolicy/g /etc/origin/node/node-config.yaml
+----
+
+4. Restart the API and master services on all masters.
+
+[source,bash]
+----
+master-restart api api
+master-restart controllers controllers
+----
+
+5. Check the atomic-openshift-node configuration
+
+[source,bash]
+----
+systemctl reload atomic-openshift-node.service`
+----
+
+6. Restart OpenShift SDN on all masters and nodes.
+
+[source,bash]
+----
+oc delete pod --all -n openshift-sdn
+----
+
+
+*Review the final configuration:*
+
+[source,bash]
+----
+$ oc get clusternetwork
+NAME      CLUSTER NETWORKS   SERVICE NETWORK   PLUGIN NAME
+default   10.128.0.0/14:9    172.30.0.0/16     redhat/openshift-ovs-networkpolicy
+----
+
+[source,bash]
+----
+$ oc get hostsubnets
+NAME                  HOST                  HOST IP        SUBNET          EGRESS CIDRS   EGRESS IPS
+node1                 node1                 192.168.1.50   10.128.0.0/23   []             []
+node2                 node2                 192.168.1.51   10.129.0.0/23   []             []
+node3                 node3                 192.168.1.52   10.130.0.0/23   []             []
+----
+
+[source,bash]
+----
+$ oc get netnamespaces
+NAME                    NETID      EGRESS IPS
+openshift               11020417   []
+----
+
+As a reference:
+
+* https://docs.openshift.com/container-platform/3.11/install_config/configuring_sdn.html#migrating-between-sdn-plugins[Migrating
+Between SDN Plug-ins]
+* https://bugzilla.redhat.com/show_bug.cgi?id=1569244[Bug 1569244 -
+ovs-subnet to ovs-networkpolicy migration does not work as documented]
+
+[[enable_network_policy.sh]]
+=== enable-network-policy.sh
+
+[source,bash]
+----
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+function allow-from-same-namespace() {
+  oc create --namespace "$1" -f - <<EOF
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: allow-from-same-namespace
+spec:
+  podSelector:
+  ingress:
+  - from:
+    - podSelector: {}
+EOF
+}
+
+function allow-from-default-namespace() {
+    oc create --namespace "$1" -f - <<EOF
+kind: NetworkPolicy
+apiVersion: networking.k8s.io/v1
+metadata:
+  name: allow-from-default-namespace
+spec:
+  podSelector:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: default
+EOF
+}
+
+for netns in $(oc get netnamespaces --output=jsonpath='{range .items[*]}{.netname}:{.netid} {end}'); do
+    name="${netns%:*}"
+    id="${netns#*:}"
+    echo ""
+    echo "NAMESPACE: ${name}"
+
+    if `link:"${id}"_-ne_"0"[`"${id}"`` ``-ne`` ``"0"`]`; then
+   # Namespaces get isolated, but allow traffic from themselves and global
+   # namespaces. We define these as separate policies so the allow-from-global-namespaces
+   # policy can be deleted if it is not needed.
+
+  echo "allow-from-same-namespace ${name}"
+   echo "allow-from-default-namespace ${name}"
+    fi
+done
+----

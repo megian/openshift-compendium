@@ -1,0 +1,76 @@
+= NFS
+
+== Setup NFS Server
+
+The following packages are required for NFS.
+
+[source,bash]
+----
+yum install portmap nfs-utils nfs4-acl-tools -y
+----
+
+The port 2049 is required by NFS4. So this port needs to be opened in the host firewall.
+
+[source,bash]
+----
+iptables -A OUTPUT -p tcp --dport 2049 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p tcp --sport 2049 -m state --state ESTABLISHED -j ACCEPT
+iptables -A OUTPUT -p udp --dport 2049 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -p udp --sport 2049 -m state --state ESTABLISHED -j ACCEPT
+service iptables save
+----
+
+Same command, if firewalld is used.
+
+[source,bash]
+----
+firewall-cmd --permanent --add-port=2049/tcp
+firewall-cmd --reload
+----
+
+An export directory is created and the rights (nfsnobody) and SELinux rights are assigned.
+
+[source,bash]
+----
+mkdir /exports
+chown -R nfsnobody:nfsnobody /exports
+chcon -Rt svirt_sandbox_file_t /exports
+----
+
+In order to improve the performance of the NFS server, the number of processes can be increased.
+
+[source,bash]
+----
+$ vi /etc/sysconfig/nfs
+RPCNFSDCOUNT=64
+----
+
+Configure the exports
+
+[source,bash]
+----
+$ vi /etc/exports
+----
+
+Reload the exports file
+
+[source,bash]
+----
+exportfs -avr
+----
+
+View the exports
+
+[source,bash]
+----
+$ showmount -e
+Export list for admin.host:
+/exports      10.200.0.0/24
+----
+
+Mount an NFS export manually
+
+[source,bash]
+----
+mount -t nfs4 10.200.0.11:/exports/pv-xvzfa /mnt
+----

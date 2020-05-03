@@ -1,0 +1,11 @@
+= Storage
+
+include::NFS/index.adoc[leveloffset=+1]
+include::Ceph/index.adoc[leveloffset=+1]
+include::Gluster/index.adoc[leveloffset=+1]
+
+== References
+
+* https://github.com/libopenstorage/stork[Stork]
+* https://blocksandfiles.com/2019/09/05/samsungs-potentially-groundbreaking-keyvalue-ssd/[Samsung’s open source key:value SSD is a game-changer for unstructured apps]
+* http://de.slideshare.net/sfoskett/fcoe-vs-iscsi-making-the-choice-from-interop-las-vegas-2011[FCoE vs iSCSI]

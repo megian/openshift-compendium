@@ -1,0 +1,160 @@
+= Base Setup
+
+== Hosts
+
+If DHCP is used, the hostname is set by DHCP reverse lookup. A static IP configuration is often not required and against the Kubernetes principals, but might be required in a static on-premis enviroment for a small cluster.
+
+[source,bash]
+----
+hostnamectl set-hostname host
+nmcli con mod ens192 ipv4.addresses 10.10.0.5/24
+nmcli con mod ens192 ipv4.gateway 10.10.0.1
+nmcli con mod ens192 ipv4.method manual
+nmcli con mod ens192 connection.autoconnect yes
+nmcli con mod ens192 ipv4.dns "10.10.0.3"
+nmcli con mod ens192 ipv4.dns-search "example.com"
+----
+
+== SSH access
+
+To generate a SSH key pair on the bastion host for the cluster administration.
+
+[source,bash]
+----
+ssh-keygen -t rsa -b 4096
+----
+
+The public key is used for the automatic login into cluster systems.
+
+[source,bash]
+----
+ssh-copy-id host
+----
+
+== Ansible Playbook Configuration
+
+The configuration of the OpenShift cluster is predefined in a configuration file in hosts.
+
+Checkout the verion specific branch of openshift-ansible. In this case release-3.11:
+
+[source,bash]
+----
+mkdir /root/git
+cd /root/git
+git clone -b release-3.11 https://github.com/openshift/openshift-ansible.git
+----
+
+The Ansible hosts file must be places in a file or a file in a directory /etc/ansible/hosts.
+
+You can then start setting up the OpenShift cluster.
+
+[source,bash]
+----
+cd /root/git/openshift-ansible
+ansible-playbook playbooks/byo/openshift-cluster/config.yml
+----
+
+== Grant the user admin cluster-admin permissions
+
+Log on to a master node and issue the following commands:
+
+[source]
+----
+oc login -u system:admin --config=/etc/origin/master/admin.kubeconfig
+oc adm policy add-cluster-role-to-user cluster-admin admin --config=/etc/origin/master/admin.kubeconfig
+----
+
+== First login
+
+[source]
+----
+https://master.lab.local:8443/console/
+Admin: admin
+Password: OriginAdmin
+----
+
+== Proxy
+
+== Setup Persistent Registry
+
+If the NFS server is not yet available, it must first be set up.
+
+== Create PersistentVolume for the docker-registry
+
+If the registry should become persistent, i.e. not lose the images with every restart, a storage volume must be added. In the case of NFS, a PersistentVolume and a PersistentVolumeClaim must be created because NFS does not support automatic provisioning. With GlusterFS the PersistentVolumeClaim has to be defined occasionally.
+
+Deployment will start if this has not already been done automatically.
+
+[source]
+----
+oc deploy deploymentconfigs/docker-registry
+----
+
+== Bring Docker Container into the registry
+
+Figure out the IP of the docker registry
+
+[source,bash]
+----
+$ oc -n default get service docker-registry
+NAME              CLUSTER-IP       EXTERNAL-IP   PORT(S)    AGE
+docker-registry   172.30.234.135   <none>        5000/TCP   3h
+----
+
+Then log on to the master
+
+[source,bash]
+----
+oc login --certificate-authority=/etc/origin/master/ca.crt -u admin https://master.lab.local:8443
+----
+
+To log into the Docker registry, a token must be obtained from OpenShift
+
+[source]
+----
+MYTOKEN=$(oc whoami -t)
+----
+
+Ceck if the token is available
+
+[source]
+----
+$ echo $MYTOKEN
+iwo7hc4XilD2KOLL4V1O55ExH2VlPmLD-W2-JOd6Fko
+----
+
+With the appropriate token you can authenticate yourself to the Docker registry
+
+[source]
+----
+$ docker login -u admin -p $MYTOKEN 172.30.234.135:5000
+----
+
+Then push the Origin Docker registry into the Docker registry
+
+[source]
+----
+scp openshift-origin-registry-3.11.0.tar 10.80.0.11:/root
+docker load -i openshift-origin-registry-3.11.0.tar
+docker tag openshift/origin-docker-registry:v3.11.0 172.30.234.135:5000/openshift/origin-docker-registry:v3.11.0
+docker push 172.30.234.135:5000/openshift/origin-docker-registry:v3.11.0
+----
+
+Then push the cockpit for Kubernetes into the Docker registry
+
+[source,bash]
+----
+scp cockpit-kubernetes-latest.tar 10.80.0.11:/root
+docker load -i cockpit-kubernetes-latest.tar
+docker tag cockpit/kubernetes:latest 172.30.234.135:5000/default/kubernetes:latest
+docker push 172.30.234.135:5000/default/kubernetes:latest
+----
+
+The Deployment Config image must be adapted to the new path
+
+[source,bash]
+----
+oc edit dc registry-console
+    image: 172.30.234.135:5000/default/kubernetes:latest
+----
+

@@ -1,0 +1,223 @@
+= Ceph
+
+= Rook Ceph for OpenShift
+
+== Operator
+
+* ROOK_HOSTPATH_REQUIRES_PRIVILEGED: true
+* FLEXVOLUME_DIR_PATH: /var/lib/kubelet/volumeplugins
+
+== Design
+
+* https://www.sebastien-han.fr/blog/2014/10/10/ceph-how-to-test-if-your-ssd-is-suitable-as-a-journal-device/[Ceph: how to test if your SSD is suitable as a journal device?]
+* https://www.youtube.com/watch?v=-FOYXz3Bz3Q[Ceph Day Germany - 10 ways to break your Ceph cluster]
+
+== Administration
+
+=== Upgrade
+
+Update all Debian packages
+
+On each host
+
+[source,bash]
+----
+systemctl restart ceph-mon*
+----
+
+==== Other
+
+http://dachary.org/?p=2428[]
+
+http://ceph.com/dev-notes/adding-support-for-rbd-to-stgt/[]
+
+[source,bash]
+----
+apt install openssh-server sudo ceph tgt tgt-rbd
+----
+
+/etc/ceph/rbdmap
+----
+foo                     id=admin,keyring=/etc/ceph/ceph.client.admin.keyring
+----
+
+/etc/ceph/ceph.client.admin.keyring
+----
+[client.admin]
+       key = AQ
+----
+
+/etc/ceph/ceph.conf
+----
+[global]
+fsid = 786b05ba-ce12-4c4a-af4e-1941fb2e4f45
+mon_initial_members = hostname
+mon_host = 192.168.174.12
+auth_cluster_required = cephx
+auth_service_required = cephx
+auth_client_required = cephx
+filestore_xattr_use_omap = true
+
+[client]
+rbd_cache = true
+rbd cache writethrough until flush = true
+----
+
+/etc/tgt/conf.d/foo.conf
+----
+<target iqn.2012-07.rbdstore.hostname:foo>
+   driver iscsi
+   bs-type rbd
+   backing-store foo
+   initiator-address ALL
+----
+
+[source,bash]
+----
+iscsiadm -m discovery -t st -p 192.168.174.12
+iscsiadm -m node --login
+
+multipath -ll
+
+mount /dev/mapper/360000000000000000e00000000010001p1 /mnt
+
+rbd resize --size 20000 foo
+tgt-admin --update iqn.2012-07.rbdstore.hostname:foo -v -f
+----
+
+[[ceph_on_atomic_host]]
+=== CEPH on Atomic Host
+
+==== Teaming
+
+[source,bash]
+----
+rpm-ostree install teamd
+rpm-ostree install NetworkManager-team
+
+nmcli con add type team con-name team-cluster-0
+nmcli con add type team-slave ifname enp4s0 master team-cluster-0
+nmcli connection modify enp4s0 802-3-ethernet.mtu 9000
+nmcli con add type team-slave ifname enp5s0 master team-cluster-0
+nmcli connection modify enp5s0 802-3-ethernet.mtu 9000
+
+nmcli con mod team-cluster-0 ipv4.addresses 192.168.1.10/24
+nmcli con mod team-cluster-0 ipv4.method manual
+nmcli connection modify team-cluster-0 802-3-ethernet.mtu 9000
+ 
+nmcli connection up team-slave-enp4s0
+nmcli connection up team-slave-enp5s0
+nmcli connection up team-cluster-0
+
+teamdctl team-cluster-0 state
+----
+
+[[upgrade_hammer_0.94.x_to_infernalis_9.2]]
+=== Upgrade Hammer 0.94.x to Infernalis 9.2
+
+[source,bash]
+----
+usermod -l cephadm ceph
+usermod -m -d /home/cephadm cephadm
+groupmod -n cephadm ceph
+----
+
+Check
+
+[source,bash]
+----
+# id cephadm
+
+id=1000(cephadm) gid=1000(cephadm)
+----
+
+[[upgrade_infernalis_9.2_to_jewel_10.2]]
+=== Upgrade Infernalis 9.2 to Jewel 10.2
+
+[source,bash]
+----
+ceph-deploy install --release jewel node1
+----
+
+* Conver RBD version 1 format
+http://ceph.com/planet/convert-rbd-to-format-v2/[]
+
+[[show_versions]]
+=== Show versions
+
+[source,bash]
+----
+ceph tell mon.* version
+
+ceph tell osd.* version
+
+ceph tell mds.* version
+----
+
+[[migrate_a_journal]]
+=== Migrate a journal
+
+http://blog-fromsomedude.rhcloud.com/2016/02/02/Moving-existing-Ceph-journals-to-SSD/[Moving existing Ceph Journal to SSD]
+
+[source,bash]
+----
+ceph osd set noout
+systemctl stop ceph-osd.``*
+ceph-osd -i `` --flush-journal
+rm -f /var/lib/ceph/osd/``/journal
+
+apt install hdparm
+
+disk_id=`uuidgen`
+journal_device="/dev/sdb"
+sgdisk --new=0:0:0 --change-name="0:ceph journal" --partition-guid=0:${disk_id} --typecode=0:45b0969e-9b03-4f30-b4c6-b4b80ceff106 --mbrtogpt ${journal_device}
+partx -a $journal_device
+ln -s /dev/disk/by-partuuid/${disk_id} /var/lib/ceph/osd/ceph-``/journal
+echo $disk_id > /var/lib/ceph/osd/ceph-``/journal_uuid
+
+ceph-osd -i `` --mkjournal
+systemctl start ceph-osd.*
+ceph osd unset noout
+----
+
+[[migrate_osd_data]]
+=== Migrate OSD data
+
+Add a new disk
+
+[source,bash]
+----
+echo "- - -" > /sys/class/scsi_host/host0/scan
+
+disk_id=\`uuidgen\`
+data_device="/dev/sdd"
+sgdisk --new=0:0:0 --change-name=0:"ceph data" --partition-guid=0:${disk_id} --typecode=0:4fbd7e29-9d25-41b8-afd0-062c0ceff05d ${data_device}
+mkfs.ext4 /dev/sdd1
+mount /dev/sdd1 /mnt
+----
+
+[[ignore_max_pg]]
+=== Ignore Max PG
+
+[source,bash]
+----
+ceph tell mon.hostname injectargs  "--mon_max_pg_per_osd 0"
+----
+
+[[deep_scrub_all_pgs]]
+=== Deep scrub all PGs
+
+[source,bash]
+----
+ceph pg dump | grep -i active+clean | cut -f 1 | while read i; do ceph pg deep-scrub ${i}; done
+----
+
+=== ISCSI
+
+https://www.sebastien-han.fr/blog/2017/01/05/Ceph-RBD-and-iSCSI/[1]
+
+=== SAMBA
+
+* http://www.linux-magazin.de/Ausgaben/2016/07/Clustered-Samba/[Samba
+mit Bordmitteln im Clustermodus betreiben]
+* https://www.mankier.com/8/vfs_ceph[VFS Ceph]

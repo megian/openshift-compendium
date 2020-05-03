@@ -1,0 +1,78 @@
+== General
+
+* https://www.nuget.org/packages/KubernetesClient/[Powershell Client]
+* https://github.com/ramitsurana/awesome-kubernetes/[Awesome-Kubernetes]
+* https://github.com/cloudyuga/kubecon18-NA[Kubecon 2018]
+* https://github.com/alexellis/k8s-on-raspbian[Kubernetes on Raspbian]
+
+== Resource Management
+* http://blog.kubecost.com/blog/requests-and-limits/
+* https://www.replex.io/blog/kubernetes-in-production-the-ultimate-guide-to-monitoring-resource-metrics
+
+== Distribution
+
+* https://github.com/poseidon/typhoon[Typhoon]
+* OKD
+* https://www.cncf.io/community/webinars/introducing-alterant-a-transparent-way-to-modify-kubernetes-configuration-files-on-the-fly/[Anterant]
+
+[[application_deployment]]
+== Application Deployment
+
+* https://github.com/kubernetes/kubernetes/pull/70875[Kustomize]
+* https://hub.kubeapps.com[Kubeapps Hub]
+* https://medium.com/@splisson/helm-vs-kapitan-vs-kustomize-1c14018faecc[Helm vs Kapitan vs Kustomize]
+* https://github.com/kubernetes/helm[Helm]
+* https://github.com/ContainerSolutions/helm-convert[Helm convert plugin]
+
+== Security
+
+* link:Kubernetes_NetworkPolicy[Kubernetes NetworkPolicy]
+* https://thenewstack.io/4-major-tenets-kubernetes-security/[The 4 Major Tenets of Kubernetes Security]
+* https://akomljen.com/get-automatic-https-with-lets-encrypt-and-kubernetes-ingress/[Get Automatic HTTPS with Let's Encrypt and Kubernetes Ingress]
+
+== Backup
+
+* https://github.com/vmware-tanzu/velero[Velero is a utility for managing disaster recovery, specifically for your Kubernetes cluster resources and persistent volumes.]
+
+== Operator
+
+* https://operatorhub.io[OperatorHub.io]
+* https://github.com/strimzi/strimzi-kafka-operator[Strimzi: Kafka as a Service]
+* https://github.com/operator-framework/operator-sdk[Operator Framework]
+* https://opensource.com/article/18/10/ansible-operators-kubernetes[An introduction to Ansible Operators in Kubernetes]
+* https://github.com/jetstack/cert-manager/[TLS certificates]
+* https://github.com/cloud-ark/kubeplus[KubePlus Platform toolkit]
+
+=== Infrastructure
+
+* https://github.com/rancher/terraform-operator[terraform-operator: Use K8s to Run Terraform]
+
+=== Database
+
+* https://blog.openshift.com/mongodb-kubernetes-operator/[MongoDB releases its Kubernetes Operator for Red Hat OpenShift]
+* https://blog.couchbase.com/couchbase-autonomous-operator-1-2-0-is-now-ga/[Couchbase Autonomous Operator]
+* https://github.com/zalando/postgres-operator[Zalando Postgres Operator]
+
+== Administration
+
+* https://akomljen.com/troubleshoot-applications-running-on-kubernetes/[Troubleshoot applications running on Kubernetes]
+* https://github.com/lucasrodcosta/kubeexec[kubeexec - Enables you to run commands in multiple k8s pods at once]
+* https://kubeyaml.com/[Validating Kubernetes YAML]
+
+=== Automated
+
+* https://www.botkube.io[Botkube]
+* https://github.com/derailed/popeye[Popeye]
+
+== Networking
+
+* https://blog.quentin-machu.fr/2018/12/15/kube-proxy-ipvs-simple-efficient-unstable/[Kube-proxy IPVS – simple, efficient, unstable]
+
+== Tutorials
+
+* https://www.magalix.com/blog/the-best-kubernetes-tutorials[Best Kubernetes Tutorials]
+
+== Certification
+
+* https://github.com/arush-sal/cka-practice-environment[cka-practice-environment]
+* https://t.co/psNrnBOrXT[Kubernetes Learning Ressources]

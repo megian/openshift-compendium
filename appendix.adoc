@@ -1,0 +1,12 @@
+= Appendix
+
+== Links
+
+. https://github.com/openshift/origin/blob/master/examples/sample-app/README.md
+. https://blog.openshift.com/managing-secrets-openshift-vault-integration/
+. http://labs.openshift3roadshow.com/
+. https://learn.openshift.com/
+. https://github.com/sclorg
+. https://github.com/OpenShiftDemos/
+. https://github.com/megian/openshift-templates
+. https://github.com/apptio/kr8[kr8 - opinionated Kubernetes cluster configuration management tool]

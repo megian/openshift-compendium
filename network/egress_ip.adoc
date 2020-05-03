@@ -1,0 +1,106 @@
+== Egress IP
+
+OpenShift does know three different solutions to control the egress traffic.
+The longer available solution is to install an egress router. This is
+kind a proxy for TCP, DNS or HTTP/HTTPS. Second solution is to add a
+egress IP to the namespace. Since OKD 3.10 it is possible to add
+multiple IPs for a failover. To overgive the IPs from node to node is
+not available.
+
+It the IP must remain the same, there is currently no other solution
+than to use the egress router.
+
+* https://blog.openshift.com/how-to-enable-static-egress-ip-in-ocp/[How
+to Enable Static Egress IP in OCP]
+* https://blog.openshift.com/accessing-external-services-using-egress-router/[Accessing
+External Services Using Egress Router]
+
+[[egress_ip]]
+=== Egress IP
+
+To enable the egress traffic is redirected to specific IPs the specific
+namespace and the nodes must be configured:
+
+To add egress IPs to the namespace:
+
+[source,bash]
+----
+oc patch netnamespace test -p '{"egressIPs": ["192.168.1.11", "192.168.1.12"]}'
+----
+
+The IPs should be distributed over differnet nodes to add high
+availability cababilities.
+
+[source,bash]
+----
+oc patch hostsubnet node1 -p '{"egressIPs": ["192.168.1.11"]}'
+oc patch hostsubnet node2 -p '{"egressIPs": ["192.168.1.12"]}'
+----
+
+So firewall rules must include all possible IPs, they are used when
+nodes with their IP are not available.
+
+[[egress_router]]
+=== Egress Router
+
+The Egress Router is not supported in newer OpenShift versions and should only be used in legacy configurations.
+
+Create a configuration file egress-test.txt:
+
+[source,bash]
+----
+NAME=egress-test
+EGRESS_SOURCE=192.168.1.10
+EGRESS_GATEWAY=192.168.1.1
+EGRESS_DESTINATION=192.168.1.100
+----
+
+Create the template file from:
+https://docs.openshift.com/container-platform/3.11/admin_guide/managing_networking.html#admin-guide-deploying-an-egress-router-pod
+
+[source,bash]
+----
+PROJECT=egress-test
+oc adm policy add-scc-to-user privileged -z egress -n ${PROJECT}
+oc process --local -f egress-router-template.yaml --param-file=${PROJECT}.txt -o yaml | oc -n ${PROJECT} apply -f -
+----
+
+Add a service for the egress router:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-1
+  namespace: egress-test
+spec:
+  ports:
+    - name: netcat
+      port: 2000
+      protocol: TCP
+      targetPort: 2000
+  selector:
+    name: gabriel-test-egress-router
+  type: ClusterIP
+----
+
+[[debug_the_egress_traffic]]
+=== Debug the egress traffic
+
+To validate, if the egress IP is correct configured, you may use netcat
+and curl.
+
+To open a port on TCP/200 with netcat and show connections verbose:
+
+[source,bash]
+----
+netcat -l 2000 -v
+----
+
+To connect to the netcat port:
+
+[source,bash]
+----
+curl http://<Egress Router IP|Destination IP>:2000
+----

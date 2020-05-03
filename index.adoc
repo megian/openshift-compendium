@@ -1,0 +1,14 @@
+= OpenShift 3 Compendium
+Gabriel Mainberger <gabisoft@freesurf.ch>
+v0.1, 2019-05-27
+:toc: left
+:toclevels: 3
+
+include::introduction/index.adoc[leveloffset=+1]
+include::architecture/index.adoc[leveloffset=+1]
+include::installation/index.adoc[leveloffset=+1]
+include::container_runtime/index.adoc[leveloffset=+1]
+include::network/index.adoc[leveloffset=+1]
+include::storage/index.adoc[leveloffset=+1]
+include::operation/index.adoc[leveloffset=+1]
+include::appendix.adoc[leveloffset=+1]

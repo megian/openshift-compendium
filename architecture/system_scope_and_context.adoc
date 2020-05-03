@@ -1,0 +1,49 @@
+= System Scope and Context
+
+This chapter describes the environment and context of a OpenShift cluster: Who uses the system and on which other system does the cluster depend.
+
+== Business scope
+
+[plantuml, business-scope, png]
+----
+@startuml
+
+Administrator -> (Bastion Host) : SSH
+Administrator -> (Master API) : Kubernetes API
+Administrator -> (Web Console) : Browser
+
+EndUser -> (Router) : HTTP/HTTPS
+
+----
+
+Administrator:: The administrator uses the Kubernetes API or the Web Console to administrate the cluster.
+
+User:: The end user communicates over the OpenShift router with the applcations running on the cluster.
+
+
+== Technical scope
+
+The following diagram shows the required components for an OpenShift cluster:
+
+[plantuml, technical-scope, png]
+----
+@startuml
+
+package "Cluster" {
+  [VM Bastion Host]
+  [VM Master (3x)]
+  [VM Nodes (n)]
+}
+
+package "Infrastructure" {
+  [DNS cluster zone]
+  [DNS router default zone]
+  [NTP]
+  [Storage]
+  [LoadBalancer master api internal]
+  [LoadBalancer master api external]
+  [LoadBalancer router]
+}
+
+@enduml
+----

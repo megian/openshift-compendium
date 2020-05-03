@@ -1,0 +1,140 @@
+= Building Block View
+
+= Component view
+
+[plantuml, component-view2, png]
+----
+@startuml
+testdot
+@enduml
+----
+
+[plantuml, component-view, png]
+----
+@startuml
+
+folder "Access Layer" {
+  node "Router load balancer external" {
+    [load-balancer-router-external] <<layer4 load balancer>>
+  }
+
+  node "API load balancer external" {
+    [load-balancer-api-external] <<layer4 load balancer>>
+  }
+}
+
+folder "Control Plane" {
+  node "API load balancer internal" {
+    [load-balancer-api-internal] as internal <<layer4 load balancer>>
+  }
+
+  node "Kubernets Master" {
+    database etcd as etcd
+    [kube-apiserver]
+    [kube-controller-manager]
+    [kube-scheduler]
+    [cloud-controller-manager]
+  }
+
+  etcd <-> [kube-apiserver]
+  [kube-controller-manager] <-> [load-balancer-api-internal]
+  [kube-scheduler] <-> [load-balancer-api-internal]
+  [cloud-controller-manager] <-> [load-balancer-api-internal]
+
+  [load-balancer-api-internal] <-> [kube-apiserver]
+}
+
+folder "Workload" {
+  node "Kubernetes Node" {
+    [kubelet]
+    [kube-proxy]
+  }
+}
+
+[kubelet] <-> [kube-apiserver]
+[kube-proxy] <-> [kube-apiserver]
+
+@enduml
+----
+
+.Table Infrastructure components
+|===
+|Component|Description
+
+|NTP
+|NTP service used by chonyd on the OpenShift nodes
+
+|DNS
+|DNS service used to resolve the cluster and router zone
+
+|LoadBalancer
+|OpenShift requires layer 4 load blanacer with health checks to take inactive nodes out of service
+|===
+
+== Bastion host
+
+Used to manage the cluster. The VM is required to manage the cluster with the openshift-ansible playbooks.
+
+.Table Bastion host components
+|===
+|Components|Description
+
+|Git
+|Serves as a repository for the configuration data
+
+|Ansible
+|A configuration management tool that is used with declarative definitions (YAML files) to install and configure the OpenShift cluster.
+
+|openshift-ansible
+|Ansible playbooks to distribute and manage an OpenShift environment. See https://github.com/openshift/openshift-ansible[OpenShift Ansible Git repository].
+
+|Docker Registry
+|If no internet access is available, the bastion host may provide a Docker registry (repository) to distrubute OpenShift infrastructure container images.
+
+|OpenSSH Server
+|SSH daemon to login remote onto the management host
+
+|===
+
+== Master
+
+The OpenShift Master provides the administrative management of the container platform.
+
+OpenShift requires at least one master. To increase the availability 3 masters are recommended. Two masters are not allowed, as etcd requires three nodes to ensure the quorum. External etcd nodes are not supported by openshift-ansible.
+
+.Table Master components
+|===
+|Component|Description
+
+|OpenSSH Server
+|Allows manging the host
+
+|etcd
+|etcd stores the persistent state of the cluster objetcs while other components watch etcd for changes to bring themselves into the desired state. etcd can be optionally configured for high availability, typically deployed with 2n+1 peer services.
+
+|Kubernetes API server
+|The Kubernetes API server validates and configures the data for pods, services, and replication controllers. It also assigns pods to nodes and synchronizes pod information with service configuration.
+
+|Kubernetes controller manager
+|The controller manager watches etcd for changes to replication controller objects and then uses the API to enforce the desired state. Several such processes create a cluster with one active leader at a time.
+
+|Kubernetes scheduler
+|The Kubernetes scheduler is a policy-rich, topology-aware, workload-specific function that significantly impacts availability, performance, and capacity.
+
+|===
+
+== Node
+
+A node provides the runtime environments for containers. Each node has the necessary services to run pods, including CRI-O or Docker, a Kubelet, and a service proxy called kube-proxy. Nodes running the application workload.
+
+.Table Node components
+|===
+|Components|Description
+
+|kubelet
+|The kubelet is the primary agent that runs on each node, managing all the containers states.
+
+|kube-proxy
+|The Kubernetes network proxy runs on each node. This reflects services as defined in the Kubernetes API on each node and can do simple TCP, UDP, and SCTP stream forwarding or round robin TCP, UDP, and SCTP forwarding across a set of backends.
+
+|===

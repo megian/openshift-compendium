@@ -1,0 +1,11 @@
+= Introduction
+
+OpenShift has a huge documentation by Red Hat. Additional documentation is available publicly for version 3.11. The page can be found at https://docs.openshift.com/container-platform/3.11/.
+
+== Technology
+
+Red Hat's OpenShift Container Platform is a Service Platform (PaaS) that provides developers and IT organizations with a cloud application platform for deploying new applications on secure, scalable resources with minimal configuration and management overhead. OpenShift Container Platform supports a wide range of programming languages ​​and frameworks such as Python, Java, Ruby, and PHP.
+
+Built on Red Hat Enterprise Linux and Google Kubernetes, OpenShift Container Platform provides a secure and scalable multi-tenant operating system for today's enterprise-class applications while providing integrated application runtime and libraries. OpenShift Container Platform brings the OpenShift PaaS platform to customer data centers, enabling organizations to implement a private PaaS that meets security, privacy, compliance and governance requirements.
+
+include::planning.adoc[leveloffset=+1]
