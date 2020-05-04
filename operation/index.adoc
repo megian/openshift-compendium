@@ -23,14 +23,14 @@ docker push docker-registry.default.svc:5000/openshift/parksmap:1.2.0
 [source,bash]
 ----
 oc rollout pause dc <dc name>
-oc rollout resume dc <dc name> 
+oc rollout resume dc <dc name>
 ----
 
 * Change an image
 
 [source,bash]
 ----
-$ OC_EDITOR="vim" oc edit dc/ 
+$ OC_EDITOR="vim" oc edit dc/
 
 spec:
   containers:
@@ -185,7 +185,7 @@ oc set volume dc docker-registry --add --overwrite -t persistentVolumeClaim --cl
 ----
 
  * Docker builder app creation
- 
+
 [source,bash]
 ----
 oc new-app --docker-image=openshift/hello-openshift:v1.0.6 -l "todelete=yes"
@@ -242,7 +242,7 @@ oc new-app https://github.com/openshift/ruby-hello-world.git#beta4
 >
 > To set a strategy, set `--strategy flag` to source or docking window
 > Example: Forcing the docker strategy for the local source repository with new-app:
-  
+
 [source,bash]
 ----
 oc new-app /home/user/code/myapp --strategy=docker
@@ -290,7 +290,7 @@ oc new-app centos/postgresql-96-centos7 -e POSTGRESQL_USER=user -e POSTGRESQL_DA
 
 [source,bash]
 ----
-oc new-app https://github.com/openshift/ruby-hello-world -o json > myapp.json 
+oc new-app https://github.com/openshift/ruby-hello-world -o json > myapp.json
 $ vi myapp.json
 oc create -f myapp.json
 ----
